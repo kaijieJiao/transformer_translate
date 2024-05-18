@@ -24,6 +24,12 @@ class Decoder(nn.Module):
 
         self.out_linear = nn.Linear(emb_size,vocab_szie)
         # self.softmax = nn.Softmax(dim=-1)
+    def open_kvcache(self):
+        for decoder_block in self.decoder_blocks:
+            decoder_block.open_kvcache()
+    def close_kvcache(self):
+        for decoder_block in self.decoder_blocks:
+            decoder_block.close_kvcache()
     def forward(self,dec_x,encoder_z,encoder_x):
         # x: (batch_size,seq_len)
         # encoder_z: (batch_size,seq_len,emb_size)

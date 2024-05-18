@@ -13,6 +13,7 @@ def translate(model,enc_sentence,device):
     dec_x = []
     dec_x.append(SOS_ID)
     MAX_TOKEN_NUM=100
+    model.decoder.open_kvcache()
     while len(dec_x) < MAX_TOKEN_NUM:
         dec_x_batch = torch.tensor(dec_x).unsqueeze(0).to(device)
         dec_y = model.decoder(dec_x_batch,encoder_z,enc_x)
@@ -22,6 +23,7 @@ def translate(model,enc_sentence,device):
             break
         else:
             dec_x.append(next_token_id.item())
+    model.decoder.close_kvcache()
     dec_x_ids = [id for id in dec_x if id not  in [UNK_ID,SOS_ID,PAD_ID,EOS_ID] ]
     dec_tokens = en_vocab.lookup_tokens(dec_x_ids) 
     return ' '.join(dec_tokens)

@@ -28,7 +28,12 @@ class DecoderBlock(nn.Module):
             nn.Linear(embedding_size*ffn_size,embedding_size)
         )
         self.layer_norm3 = nn.LayerNorm(embedding_size)
-
+    def open_kvcache(self):
+        self.multiheadattention1.set_kvcache(kv_cache_type='self_attention')
+        self.multiheadattention2.set_kvcache(kv_cache_type='cross_attention')
+    def close_kvcache(self):
+        self.multiheadattention1.set_kvcache(kv_cache_type='')
+        self.multiheadattention2.set_kvcache(kv_cache_type='')
     def forward(self,x,encoder_z,atten_mask1,atten_mask2):
         # x: (batch_size,seq_len,embedding_size)
         x = self.layer_norm1(self.multiheadattention1(x,x,atten_mask1)+x)

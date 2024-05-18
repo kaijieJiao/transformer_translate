@@ -10,18 +10,49 @@ class MultiHeadAttention(nn.Module):
         self.q_k_size=qk_size
         self.v_size=v_size
         self.embedding_size=embedding_size
+        # kv_cache推理优化
+        self.kv_cache = {}
+        self.kv_cache_type = ''
         self.w_q = nn.Linear(embedding_size,num_head*qk_size)
         self.w_k = nn.Linear(embedding_size,num_head*qk_size)
         self.w_v = nn.Linear(embedding_size,num_head*v_size)
         self.w_o = nn.Linear(num_head*v_size,embedding_size)
-        self.soft_max=nn.Softmax(dim=-1)
+        # self.soft_max=nn.Softmax(dim=-1)
         
+    def set_kv_cache(self,kv_cache_type=''):
+        self.kv_cache_type=kv_cache_type
+        self.kv_cache={}
 
-    def forward(self,x,x_k_v,attention_mask=None):
-        # x=y [batch_size,sequence_len,embedding_size]
-        q=self.w_q(x)  #q  [batch_size,sequence_len,num_head*qk_size]
-        k=self.w_k(x_k_v)  #k  [batch_size,sequence_len,num_head*qk_size]
-        v=self.w_v(x_k_v)  #v  [batch_size,sequence_len,num_head*v_size]
+    def forward(self,x,x_k_v,attention_mask):
+        if self.kv_cache_type=='selfattention':
+            q=self.w_q(x[:,-1,:])
+            k=self.w_k(x_k_v[:,-1,:])
+            v=self.w_v(x_k_v[:,-1,:])
+            if 'Q' in self.kv_cache:
+                q=torch.concat((self.kv_cache['Q'],q),dim=1)
+            if 'K' in self.kv_cache:
+                k=torch.concat((self.kv_cache['K'],k),dim=1)
+            if 'V' in self.kv_cache:
+                v=torch.concat((self.kv_cache['V'],v),dim=1)
+            self.kv_cache.update({'Q':q.detach(),'K':k.detach(),'V':v.detach()})
+        elif self.kv_cache_type=='crossattention':
+            q=self.w_q(x[:,1,:])
+            if 'Q' in self.kv_cache:
+                q=torch.concat((self.kv_cache['Q'],q),dim=1)
+            if 'K' in self.kv_cache:
+                k=self.kv_cache['K']
+            else:
+                k=self.w_k(x_k_v)
+            if 'V' in self.kv_cache:
+                v=self.kv_cache['V']
+            else:
+                v=self.w_v(x_k_v)
+            self.kv_cache.update({'Q':q.detach(),'K':k.detach(),'V':v.detach()})
+        else:
+            # x=y [batch_size,sequence_len,embedding_size]
+            q=self.w_q(x)  #q  [batch_size,sequence_len,num_head*qk_size]
+            k=self.w_k(x_k_v)  #k  [batch_size,sequence_len,num_head*qk_size]
+            v=self.w_v(x_k_v)  #v  [batch_size,sequence_len,num_head*v_size]
         q=q.view(q.size()[0],q.size()[1],self.num_head,-1).transpose(1,2)   #q [batch_size,num_head,sequence_len,qk_size]
         k=k.view(k.size()[0],k.size()[1],self.num_head,-1).transpose(1,2).transpose(2,3)   #k [batch_size,num_head,sequence_len,qk_size]
         v=v.view(v.size()[0],v.size()[1],self.num_head,-1).transpose(1,2)   #v [batch_size,num_head,sequence_len,v_size]
