@@ -10,9 +10,9 @@ class MultiHeadAttention(nn.Module):
         self.q_k_size=qk_size
         self.v_size=v_size
         self.embedding_size=embedding_size
-        # kv_cache推理优化
-        self.kv_cache = {}
-        self.kv_cache_type = ''
+        #kvcache 推理优化
+        self.kv_cache_type=kv_cache_type
+        self.kv_cache={}
         self.w_q = nn.Linear(embedding_size,num_head*qk_size)
         self.w_k = nn.Linear(embedding_size,num_head*qk_size)
         self.w_v = nn.Linear(embedding_size,num_head*v_size)
@@ -20,34 +20,36 @@ class MultiHeadAttention(nn.Module):
         # self.soft_max=nn.Softmax(dim=-1)
         
     def set_kv_cache(self,kv_cache_type=''):
+        #kvcache 推理优化
         self.kv_cache_type=kv_cache_type
         self.kv_cache={}
 
     def forward(self,x,x_k_v,attention_mask):
-        if self.kv_cache_type=='selfattention':
-            q=self.w_q(x[:,-1,:])
-            k=self.w_k(x_k_v[:,-1,:])
-            v=self.w_v(x_k_v[:,-1,:])
-            if 'Q' in self.kv_cache:
-                q=torch.concat((self.kv_cache['Q'],q),dim=1)
-            if 'K' in self.kv_cache:
-                k=torch.concat((self.kv_cache['K'],k),dim=1)
-            if 'V' in self.kv_cache:
-                v=torch.concat((self.kv_cache['V'],v),dim=1)
-            self.kv_cache.update({'Q':q.detach(),'K':k.detach(),'V':v.detach()})
-        elif self.kv_cache_type=='crossattention':
-            q=self.w_q(x[:,1,:])
-            if 'Q' in self.kv_cache:
-                q=torch.concat((self.kv_cache['Q'],q),dim=1)
-            if 'K' in self.kv_cache:
-                k=self.kv_cache['K']
-            else:
-                k=self.w_k(x_k_v)
-            if 'V' in self.kv_cache:
-                v=self.kv_cache['V']
-            else:
-                v=self.w_v(x_k_v)
-            self.kv_cache.update({'Q':q.detach(),'K':k.detach(),'V':v.detach()})
+        if hasattr(self,'kv_cache_type'):
+            if self.kv_cache_type=='selfattention':
+                q=self.w_q(x[:,-1,:])
+                k=self.w_k(x_k_v[:,-1,:])
+                v=self.w_v(x_k_v[:,-1,:])
+                if 'Q' in self.kv_cache:
+                    q=torch.concat((self.kv_cache['Q'],q),dim=1)
+                if 'K' in self.kv_cache:
+                    k=torch.concat((self.kv_cache['K'],k),dim=1)
+                if 'V' in self.kv_cache:
+                    v=torch.concat((self.kv_cache['V'],v),dim=1)
+                self.kv_cache.update({'Q':q.detach(),'K':k.detach(),'V':v.detach()})
+            elif self.kv_cache_type=='crossattention':
+                q=self.w_q(x[:,1,:])
+                if 'Q' in self.kv_cache:
+                    q=torch.concat((self.kv_cache['Q'],q),dim=1)
+                if 'K' in self.kv_cache:
+                    k=self.kv_cache['K']
+                else:
+                    k=self.w_k(x_k_v)
+                if 'V' in self.kv_cache:
+                    v=self.kv_cache['V']
+                else:
+                    v=self.w_v(x_k_v)
+                self.kv_cache.update({'Q':q.detach(),'K':k.detach(),'V':v.detach()})
         else:
             # x=y [batch_size,sequence_len,embedding_size]
             q=self.w_q(x)  #q  [batch_size,sequence_len,num_head*qk_size]
